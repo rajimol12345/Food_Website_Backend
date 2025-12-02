@@ -3,21 +3,32 @@ const router = express.Router();
 const Menu = require('../models/Menu');
 const mongoose = require('mongoose');
 
-// Add new menu
+// ----------------------------------------------------
+//  ADD NEW MENU
+// ----------------------------------------------------
 router.post('/addmenu', async (req, res) => {
   try {
-    const { name, price, description, image, restaurantId } = req.body;
+    const { name, price, description, image, restaurantId, category } = req.body;
 
-    const newMenu = new Menu({ name, price, description, image, restaurantId });
+    const newMenu = new Menu({ 
+      name, 
+      price, 
+      description, 
+      image, 
+      restaurantId,
+      category 
+    });
+
     const savedMenu = await newMenu.save();
-
     res.status(201).json(savedMenu);
   } catch (err) {
     res.status(500).json({ error: 'Failed to add menu' });
   }
 });
 
-// Get a single menu item by ID
+// ----------------------------------------------------
+//  GET SINGLE MENU ITEM BY ID
+// ----------------------------------------------------
 router.get('/item/:id', async (req, res) => {
   const { id } = req.params;
 
@@ -36,7 +47,9 @@ router.get('/item/:id', async (req, res) => {
   }
 });
 
-//  Get all menus with restaurant name populated (for admin)
+// ----------------------------------------------------
+//  ADMIN: GET ALL MENUS WITH RESTAURANT NAME
+// ----------------------------------------------------
 router.get('/admin/menus', async (req, res) => {
   try {
     const menus = await Menu.find().populate('restaurantId', 'name');
@@ -47,7 +60,9 @@ router.get('/admin/menus', async (req, res) => {
   }
 });
 
-// ✅ Update menu by ID (admin)
+// ----------------------------------------------------
+//  ADMIN: UPDATE MENU BY ID
+// ----------------------------------------------------
 router.put('/admin/menus/:id', async (req, res) => {
   try {
     const updated = await Menu.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -59,7 +74,9 @@ router.put('/admin/menus/:id', async (req, res) => {
   }
 });
 
-// ✅ Delete menu by ID (admin)
+// ----------------------------------------------------
+//  ADMIN: DELETE MENU BY ID
+// ----------------------------------------------------
 router.delete('/admin/menus/:id', async (req, res) => {
   try {
     const deletedMenu = await Menu.findByIdAndDelete(req.params.id);
@@ -72,7 +89,9 @@ router.delete('/admin/menus/:id', async (req, res) => {
   }
 });
 
-// ✅ Get all menus for a specific restaurant (moved to bottom to avoid route conflict)
+// ----------------------------------------------------
+//  GET ALL MENUS FOR A SPECIFIC RESTAURANT
+// ----------------------------------------------------
 router.get('/restaurant/:restaurantId', async (req, res) => {
   const { restaurantId } = req.params;
 
@@ -88,7 +107,10 @@ router.get('/restaurant/:restaurantId', async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
-// Search menus by name (case-insensitive)
+
+// ----------------------------------------------------
+//  SEARCH MENUS BY NAME (case-insensitive)
+// ----------------------------------------------------
 router.get('/menus/search/:menuName', async (req, res) => {
   try {
     const menuName = req.params.menuName;
@@ -102,7 +124,9 @@ router.get('/menus/search/:menuName', async (req, res) => {
   }
 });
 
-// Search menus by category (case-insensitive)
+// ----------------------------------------------------
+//  SEARCH MENUS BY CATEGORY (case-insensitive)
+// ----------------------------------------------------
 router.get('/menus/category/:categoryName', async (req, res) => {
   try {
     const categoryName = req.params.categoryName;
@@ -115,6 +139,5 @@ router.get('/menus/category/:categoryName', async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
-
 
 module.exports = router;

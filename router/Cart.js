@@ -1,14 +1,18 @@
-// routes/cart.js
 const express = require("express");
 const router = express.Router();
 const Cart = require("../models/Cart");
 
-// Add to Cart
+// =====================
+// ADD TO CART
+// =====================
 router.post("/addcart", async (req, res) => {
   const { userId, menuId, quantity } = req.body;
 
+  if (!userId || !menuId) {
+    return res.status(400).json({ error: "userId and menuId are required" });
+  }
+
   try {
-    // Check if item already exists for user
     let existingItem = await Cart.findOne({ userId, menuId });
 
     if (existingItem) {
@@ -30,7 +34,9 @@ router.post("/addcart", async (req, res) => {
   }
 });
 
-//  Update quantity
+// =====================
+// UPDATE QUANTITY
+// =====================
 router.put("/update/:itemId", async (req, res) => {
   const { itemId } = req.params;
   const { quantity } = req.body;
@@ -45,7 +51,10 @@ router.put("/update/:itemId", async (req, res) => {
       { quantity },
       { new: true }
     );
-    if (!updated) return res.status(404).json({ error: "Item not found" });
+
+    if (!updated) {
+      return res.status(404).json({ error: "Cart item not found" });
+    }
 
     res.json(updated);
   } catch (err) {
@@ -54,14 +63,18 @@ router.put("/update/:itemId", async (req, res) => {
   }
 });
 
-//  Fetch cart items for a user (with menu details)
+// =====================
+// GET CART ITEMS WITH MENU DETAILS (INCLUDING IMAGE)
+// =====================
 router.get("/:userId", async (req, res) => {
   const { userId } = req.params;
+
   try {
     const cartItems = await Cart.find({ userId }).populate(
       "menuId",
-      "name price image description"
-    ); // only fetch required fields
+      "name price image description" // MUST include image here!
+    );
+
     res.json(cartItems);
   } catch (err) {
     console.error("Cart fetch error:", err);
@@ -69,14 +82,19 @@ router.get("/:userId", async (req, res) => {
   }
 });
 
-//  Delete cart item
+// =====================
+// DELETE CART ITEM
+// =====================
 router.delete("/:userId/:menuId", async (req, res) => {
   const { userId, menuId } = req.params;
+
   try {
     const deleted = await Cart.findOneAndDelete({ userId, menuId });
+
     if (!deleted) {
       return res.status(404).json({ message: "Cart item not found" });
     }
+
     res.json({ message: "Item deleted successfully" });
   } catch (err) {
     console.error("Error deleting item from cart:", err);
