@@ -139,5 +139,36 @@ router.get('/menus/category/:categoryName', async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+// ----------------------------------------------------
+//  SEARCH MENUS BY NAME (case-insensitive)
+// ----------------------------------------------------
+router.get('/menus/search/:menuName', async (req, res) => {
+  try {
+    const menuName = req.params.menuName;
+    const menus = await Menu.find({
+      name: { $regex: menuName, $options: 'i' }
+    });
+    res.status(200).json(menus);
+  } catch (error) {
+    console.error('Error searching menus by name:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ----------------------------------------------------
+//  SEARCH MENUS BY CATEGORY (case-insensitive)
+// ----------------------------------------------------
+router.get('/menus/category/:categoryName', async (req, res) => {
+  try {
+    const categoryName = req.params.categoryName;
+    const menus = await Menu.find({
+      category: { $regex: categoryName, $options: 'i' }
+    });
+    res.status(200).json(menus);
+  } catch (error) {
+    console.error('Error searching menus by category:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
 
 module.exports = router;

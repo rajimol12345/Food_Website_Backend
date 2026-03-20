@@ -32,9 +32,16 @@ io.on("connection", (socket) => {
 // -----------------------------------------------------------------------------
 // MIDDLEWARE
 // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// MIDDLEWARE
+// -----------------------------------------------------------------------------
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://localhost:3001"],
+    origin: (origin, callback) => {
+      // Allow any origin that is not undefined (useful for mobile apps or local testing)
+      if (!origin) return callback(null, true);
+      callback(null, true); // Reflect any origin to browser
+    },
     credentials: true,
   })
 );
@@ -43,14 +50,39 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // -----------------------------------------------------------------------------
+// REQUEST LOGGER
+// -----------------------------------------------------------------------------
+app.use((req, res, next) => {
+  if (req.method !== 'GET') {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - Body present: ${!!req.body}`);
+  }
+  next();
+});
+
+// -----------------------------------------------------------------------------
+// HEALTH CHECK
+// -----------------------------------------------------------------------------
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    dbState: mongoose.connection.readyState,
+    message: "Backend diagnostics active. Version 1.1"
+  });
+});
+
+// -----------------------------------------------------------------------------
 // MONGO DB CONNECTION
 // -----------------------------------------------------------------------------
 mongoose
-  .connect(process.env.MONGO_URI || "mongodb://localhost:27017/food_ordering")
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) =>
-    console.error("❌ MongoDB connection error:", err.message)
-  );
+  .connect(process.env.MONGO_URI || "mongodb://localhost:27017/food_ordering", {
+    serverSelectionTimeoutMS: 5000, // 5 seconds timeout
+  })
+  .then(() => console.log("✅ MongoDB connected successfully"))
+  .catch((err) => {
+    console.error("❌ MongoDB connection error:", err.message);
+    console.error("Full error details:", err);
+  });
 
 // -----------------------------------------------------------------------------
 // ROUTERS (Make sure these files exist inside /router folder)
@@ -102,6 +134,18 @@ app.get("/api/payment/config", (req, res) => {
 // -----------------------------------------------------------------------------
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });
+});
+
+// -----------------------------------------------------------------------------
+// GLOBAL ERROR HANDLER
+// -----------------------------------------------------------------------------
+app.use((err, req, res, next) => {
+  console.error("❌ GLOBAL ERROR:", err);
+  res.status(500).json({ 
+    error: 'Internal Server Error', 
+    details: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
 });
 
 // -----------------------------------------------------------------------------

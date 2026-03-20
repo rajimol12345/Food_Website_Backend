@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose'); 
 
 const User = require('../models/User');
@@ -9,6 +9,12 @@ const Menu = require('../models/Menu');
 
 // ========== REGISTER ==========
 router.post('/register', async (req, res) => {
+  // Check DB connection
+  if (mongoose.connection.readyState !== 1) {
+    console.error('❌ DB Connection Error: readyState =', mongoose.connection.readyState);
+    return res.status(500).json({ error: 'Internal Server Error: Database not connected' });
+  }
+
   const { fullname, email, phone, password, confirmPassword } = req.body;
                             
   if (!fullname || !email || !password || !confirmPassword) {
@@ -22,6 +28,7 @@ router.post('/register', async (req, res) => {
   try {
     const existingUser = await User.findOne({ email });
     if (existingUser) {
+      console.log(`Registration failed: Email ${email} already exists`);
       return res.status(400).json({ error: 'Email already registered' });
     }
 
@@ -29,15 +36,28 @@ router.post('/register', async (req, res) => {
     const newUser = new User({ fullname, email, phone, password: hashedPassword });
     await newUser.save();
 
+    console.log(`✅ User registered successfully: ${email}`);
     res.status(201).json({ message: 'User registered successfully' });
   } catch (err) {
-    console.error('Error during registration:', err);
-    res.status(500).json({ error: 'Registration failed' });
+    console.error('❌ Registration Error:', err);
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ error: 'Validation Error: ' + err.message });
+    }
+    if (err.code === 11000) {
+      return res.status(400).json({ error: 'Email already in use' });
+    }
+    res.status(500).json({ error: 'Registration failed: ' + err.message });
   }
 });
 
 // ========== LOGIN ==========
 router.post('/login', async (req, res) => {
+  // Check DB connection
+  if (mongoose.connection.readyState !== 1) {
+    console.error('❌ DB Connection Error: readyState =', mongoose.connection.readyState);
+    return res.status(500).json({ error: 'Internal Server Error: Database not connected' });
+  }
+
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -58,7 +78,7 @@ router.post('/login', async (req, res) => {
     res.status(200).json({ message: 'Login successful', token: user.id }); // You can replace with JWT later
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error: ' + err.message });
   }
 });
 
