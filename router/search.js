@@ -26,11 +26,11 @@ router.get("/", async (req, res) => {
     // Run Fuse search
     const results = fuse.search(query).map((r) => r.item);
 
-    // IMPORTANT: return ARRAY, not object
-    res.json(results);
+    // Return as object to match frontend expectation
+    res.json({ results });
   } catch (err) {
     console.error("Search error:", err);
-    res.status(500).json([]);
+    res.status(500).json({ results: [] });
   }
 });
 

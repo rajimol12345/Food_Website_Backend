@@ -5,6 +5,26 @@ const mongoose = require("mongoose");
 const http = require("http");
 const socketIo = require("socket.io");
 
+// Import Models
+const Message = require("./models/Message");
+
+// Import Routers
+const UserRouter = require("./router/user");
+const RestaurantRouter = require("./router/restaurants");
+const MenuRouter = require("./router/menu");
+const CartRouter = require("./router/Cart");
+const SavedItemRoutes = require("./router/savedItems");
+const OrderRouter = require("./router/order");
+const SearchRouter = require("./router/search");
+const AdminRouter = require("./router/admin");
+const adminNotificationRouter = require("./router/adminNotifications");
+const settingsRouter = require("./router/settings");
+const ratingRouter = require("./router/rate");
+const adminRoutes = require("./router/adminRoutes");
+const paymentRouter = require("./router/payment");
+const foodRoutes = require("./router/food");
+const messageRouter = require("./router/message");
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -23,6 +43,57 @@ app.set("io", io);
 
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
+
+  // Join a private support room (for users)
+  socket.on("join_chat", (userId) => {
+    socket.join(userId);
+    console.log(`User ${userId} joined their support chat room`);
+  });
+
+  // Join the global admin room
+  socket.on("join_admin", () => {
+    socket.join("admin_room");
+    console.log("Admin joined the global support room");
+  });
+
+  // Handle messages from user or admin
+  socket.on("send_message", async (data) => {
+    // data: { senderId, receiverId, message, role }
+    const { receiverId, message, role, senderId } = data;
+    
+    try {
+      // Create and save new message to DB
+      const newMessage = new Message({
+        senderId,
+        receiverId,
+        message,
+        role,
+        timestamp: new Date()
+      });
+      await newMessage.save();
+
+      // 1. Send to the designated recipient's room
+      io.to(receiverId).emit("receive_message", {
+        senderId,
+        message,
+        role,
+        timestamp: newMessage.timestamp
+      });
+
+      // 2. If it's from a user, also broadcast it to the global admin room 
+      // for discovery (so admins see new users appearing in the list)
+      if (role === 'user') {
+        io.to("admin_room").emit("new_admin_message", {
+          senderId,
+          message,
+          role,
+          timestamp: newMessage.timestamp
+        });
+      }
+    } catch (error) {
+      console.error("Error saving message:", error);
+    }
+  });
 
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
@@ -85,24 +156,6 @@ mongoose
   });
 
 // -----------------------------------------------------------------------------
-// ROUTERS (Make sure these files exist inside /router folder)
-// -----------------------------------------------------------------------------
-const UserRouter = require("./router/user");
-const RestaurantRouter = require("./router/restaurants");
-const MenuRouter = require("./router/menu");
-const CartRouter = require("./router/Cart");
-const SavedItemRoutes = require("./router/savedItems");
-const OrderRouter = require("./router/order");
-const SearchRouter = require("./router/search");
-const AdminRouter = require("./router/admin");
-const adminNotificationRouter = require("./router/adminNotifications");
-const settingsRouter = require("./router/settings");
-const ratingRouter = require("./router/rate"); // ⭐ Your rating route
-const adminRoutes = require("./router/adminRoutes");
-const paymentRouter = require("./router/payment");
-const foodRoutes = require("./router/food");
-
-// -----------------------------------------------------------------------------
 // API ENDPOINTS
 // -----------------------------------------------------------------------------
 app.use("/food-ordering-app/api/user", UserRouter);
@@ -119,6 +172,7 @@ app.use("/api/rate", ratingRouter); // ⭐ Correct rating API path: /api/rate
 app.use("/api/admin", adminRoutes);
 app.use("/api/payment", paymentRouter);
 app.use("/api/foods", foodRoutes);
+app.use("/api/messages", messageRouter);
 
 // -----------------------------------------------------------------------------
 // PAYPAL PUBLIC CLIENT ID ENDPOINT
@@ -151,30 +205,39 @@ app.use((err, req, res, next) => {
 // -----------------------------------------------------------------------------
 // START SERVER WITH AUTO PORT FALLBACK
 // -----------------------------------------------------------------------------
-function startServer(port) {
-  server
-    .listen(port)
-    .on("error", (err) => {
-      if (err.code === "EADDRINUSE") {
-        console.warn(`⚠ Port ${port} already in use. Trying ${port + 1}...`);
-        startServer(port + 1);
-      } else {
-        console.error("Server Error:", err);
-      }
-    })
-    .on("listening", () => {
-      const maskedCID =
-        (process.env.PAYPAL_CLIENT_ID || "").slice(0, 6) +
-        "..." +
-        (process.env.PAYPAL_CLIENT_ID || "").slice(-4);
+const startServer = (port) => {
+  const currentPort = Number(port);
 
-      console.log(`🚀 Server running on http://localhost:${server.address().port}`);
-      console.log(
-        `PayPal Client ID: ${
-          process.env.PAYPAL_CLIENT_ID ? maskedCID : "⚠ NOT SET"
-        }`
-      );
-    });
-}
+  server.once("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.warn(`⚠ Port ${currentPort} already in use. Trying ${currentPort + 1}...`);
+      server.close(() => {
+        startServer(currentPort + 1);
+      });
+    } else {
+      console.error("❌ Server Error:", err);
+      process.exit(1);
+    }
+  });
 
-startServer(Number(PORT));
+  server.once("listening", () => {
+    const addr = server.address();
+    const actualPort = typeof addr === "string" ? addr : addr.port;
+    
+    const maskedCID =
+      (process.env.PAYPAL_CLIENT_ID || "").slice(0, 6) +
+      "..." +
+      (process.env.PAYPAL_CLIENT_ID || "").slice(-4);
+
+    console.log(`🚀 Server running on http://localhost:${actualPort}`);
+    console.log(
+      `PayPal Client ID: ${
+        process.env.PAYPAL_CLIENT_ID ? maskedCID : "⚠ NOT SET"
+      }`
+    );
+  });
+
+  server.listen(currentPort);
+};
+
+startServer(PORT);

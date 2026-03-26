@@ -64,16 +64,19 @@ router.put("/update/:itemId", async (req, res) => {
 });
 
 // =====================
-// GET CART ITEMS WITH MENU DETAILS (INCLUDING IMAGE)
+// GET CART ITEMS WITH MENU DETAILS (INCLUDING IMAGE AND RESTAURANT)
 // =====================
 router.get("/:userId", async (req, res) => {
-  const { userId } = req.params;
-
   try {
-    const cartItems = await Cart.find({ userId }).populate(
-      "menuId",
-      "name price image description" // MUST include image here!
-    );
+    const { userId } = req.params;
+    const cartItems = await Cart.find({ userId }).populate({
+      path: "menuId",
+      select: "name price image description restaurantId",
+      populate: {
+        path: "restaurantId",
+        select: "name"
+      }
+    });
 
     res.json(cartItems);
   } catch (err) {

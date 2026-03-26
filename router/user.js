@@ -9,76 +9,137 @@ const Menu = require('../models/Menu');
 
 // ========== REGISTER ==========
 router.post('/register', async (req, res) => {
-  // Check DB connection
-  if (mongoose.connection.readyState !== 1) {
-    console.error('❌ DB Connection Error: readyState =', mongoose.connection.readyState);
-    return res.status(500).json({ error: 'Internal Server Error: Database not connected' });
-  }
-
-  const { fullname, email, phone, password, confirmPassword } = req.body;
-                            
-  if (!fullname || !email || !password || !confirmPassword) {
-    return res.status(400).json({ error: 'All required fields must be filled' });
-  }
-
-  if (password !== confirmPassword) {
-    return res.status(400).json({ error: 'Passwords do not match' });
-  }
-
   try {
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      console.log(`Registration failed: Email ${email} already exists`);
-      return res.status(400).json({ error: 'Email already registered' });
+    // 1. Check DB connection
+    if (mongoose.connection.readyState !== 1) {
+      console.error('❌ DB Connection Error: readyState =', mongoose.connection.readyState);
+      return res.status(503).json({ 
+        error: 'Service Unavailable', 
+        message: 'Database not connected. Please try again later.' 
+      });
     }
 
+    const { fullname, email, phone, password, confirmPassword } = req.body;
+                              
+    // 2. Validate input fields
+    if (!fullname || !email || !phone || !password) {
+      return res.status(400).json({ 
+        error: 'Missing fields', 
+        message: 'All required fields (Full Name, Email, Phone, Password) must be filled.' 
+      });
+    }
+
+    if (confirmPassword && password !== confirmPassword) {
+      return res.status(400).json({ 
+        error: 'Password mismatch', 
+        message: 'Passwords do not match.' 
+      });
+    }
+
+    // 3. Check for existing user
+    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existingUser) {
+      console.log(`Registration failed: Email ${email} already exists`);
+      return res.status(400).json({ 
+        error: 'Email exists', 
+        message: 'This email is already registered.' 
+      });
+    }
+
+    // 4. Hash password and save user
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ fullname, email, phone, password: hashedPassword });
+    const newUser = new User({ 
+      fullname: fullname.trim(), 
+      email: email.toLowerCase().trim(), 
+      phone: phone.trim(), 
+      password: hashedPassword 
+    });
+
     await newUser.save();
 
     console.log(`✅ User registered successfully: ${email}`);
     res.status(201).json({ message: 'User registered successfully' });
+
   } catch (err) {
     console.error('❌ Registration Error:', err);
+
     if (err.name === 'ValidationError') {
-      return res.status(400).json({ error: 'Validation Error: ' + err.message });
+      return res.status(400).json({ 
+        error: 'Validation Error', 
+        message: err.message 
+      });
     }
     if (err.code === 11000) {
-      return res.status(400).json({ error: 'Email already in use' });
+      return res.status(400).json({ 
+        error: 'Duplicate Key', 
+        message: 'Email already in use.' 
+      });
     }
-    res.status(500).json({ error: 'Registration failed: ' + err.message });
+
+    res.status(500).json({ 
+      error: 'Registration failed', 
+      message: 'An internal server error occurred: ' + err.message 
+    });
   }
 });
 
 // ========== LOGIN ==========
 router.post('/login', async (req, res) => {
-  // Check DB connection
-  if (mongoose.connection.readyState !== 1) {
-    console.error('❌ DB Connection Error: readyState =', mongoose.connection.readyState);
-    return res.status(500).json({ error: 'Internal Server Error: Database not connected' });
-  }
-
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required' });
-  }
-
   try {
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+    // 1. Check DB connection
+    if (mongoose.connection.readyState !== 1) {
+      console.error('❌ DB Connection Error: readyState =', mongoose.connection.readyState);
+      return res.status(503).json({ 
+        error: 'Service Unavailable', 
+        message: 'Database not connected. Please try again later.' 
+      });
     }
 
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ 
+        error: 'Missing fields', 
+        message: 'Email and password are required.' 
+      });
+    }
+
+    // 2. Find user
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) {
+      return res.status(401).json({ 
+        error: 'Unauthorized', 
+        message: 'Invalid email or password.' 
+      });
+    }
+
+    // 3. Verify password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ 
+        error: 'Unauthorized', 
+        message: 'Invalid email or password.' 
+      });
     }
 
-    res.status(200).json({ message: 'Login successful', token: user.id }); // You can replace with JWT later
+    console.log(`✅ User logged in: ${email}`);
+    res.status(200).json({ 
+      message: 'Login successful', 
+      token: user.id, // Consider using JWT here
+      user: {
+        id: user.id,
+        fullname: user.fullname,
+        email: user.email,
+        role: user.role
+      }
+    });
+
   } catch (err) {
-    console.error('Login error:', err);
-    res.status(500).json({ error: 'Server error: ' + err.message });
+    console.error('❌ Login error:', err);
+    res.status(500).json({ 
+      error: 'Server error', 
+      message: 'An internal server error occurred: ' + err.message 
+    });
   }
 });
 
